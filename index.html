@@ -758,6 +758,11 @@
                         <path d="M32.667 16h150v100L141 157.667h-33.333l-25 25h-25v-25H16V49.333zM166 107.667v-75H49.333v100h25v25l25-25H141zm-41.667-50H141v41.666h-16.667zm-25 0v41.666H82.667V57.667z"/>
                     </svg>
                 </a>
+                <a href="https://www.facebook.com/MrTakeet0" class="social-link" aria-label="Facebook" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 200 200" fill="currentColor">
+                        <path d="M100 16.667C52.667 16.667 13.333 56 13.333 103.333c0 43.334 32 79.333 74 86.667v-62.667h-22.333v-24h22.333V95c0-22.333 13.334-34.667 33.667-34.667 9.333 0 19.333 1.667 19.333 1.667v21.333h-10.667c-10.666 0-14 6.667-14 13.333v16.334h24l-3.833 24h-20.167v62.667c42-7.334 74-43.334 74-86.667C186.667 56 147.333 16.667 100 16.667z"/>
+                    </svg>
+                </a>
             </div>
         </header>
 
@@ -826,6 +831,16 @@
                 <div class="link-content">
                     <div class="link-title">Instagram</div>
                     <div class="link-subtitle">Sígueme en Instagram</div>
+                </div>
+            </a>
+
+            <a href="https://www.facebook.com/MrTakeet0" class="link-button" target="_blank" rel="noopener noreferrer">
+                <div class="link-icon">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@13.17.0/icons/facebook.svg" alt="Facebook">
+                </div>
+                <div class="link-content">
+                    <div class="link-title">Facebook</div>
+                    <div class="link-subtitle">Sígueme en Facebook</div>
                 </div>
             </a>
         </section>
@@ -907,22 +922,63 @@
         let score = 0;
         let gameRunning = false;
         let gameLoop = null;
+        
+        // Cargar imagen del taco
+        const tacoImage = new Image();
+        tacoImage.src = 'taco_feliz2.png';
+        let tacoImageLoaded = false;
+        tacoImage.onload = function() {
+            tacoImageLoaded = true;
+            drawGame();
+        };
+        tacoImage.onerror = function() {
+            console.error('Error al cargar la imagen del taco');
+            tacoImageLoaded = false;
+        };
 
-        // Cargar high score del localStorage
-        let highScore = localStorage.getItem('snakeHighScore') || 0;
+        // Cargar high score del localStorage con validación
+        let highScore = 0;
+        try {
+            const savedScore = localStorage.getItem('snakeHighScore');
+            if (savedScore !== null) {
+                const parsedScore = parseInt(savedScore, 10);
+                if (!isNaN(parsedScore) && parsedScore >= 0) {
+                    highScore = parsedScore;
+                }
+            }
+        } catch (e) {
+            console.error('Error al leer highScore del localStorage:', e);
+        }
         document.getElementById('snakeHighScore').textContent = highScore;
 
         function randomFood() {
-            food = {
-                x: Math.floor(Math.random() * tileCount),
-                y: Math.floor(Math.random() * tileCount)
-            };
-            // Asegurar que la comida no aparezca en la serpiente
-            for (let segment of snake) {
-                if (segment.x === food.x && segment.y === food.y) {
-                    randomFood();
-                    return;
+            let attempts = 0;
+            const maxAttempts = 100; // Evitar loops infinitos
+            
+            do {
+                food = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+                attempts++;
+                
+                // Verificar si la comida está en la serpiente
+                let foodOnSnake = false;
+                for (let segment of snake) {
+                    if (segment.x === food.x && segment.y === food.y) {
+                        foodOnSnake = true;
+                        break;
+                    }
                 }
+                
+                if (!foodOnSnake) {
+                    break;
+                }
+            } while (attempts < maxAttempts);
+            
+            // Si no se encontró posición válida después de maxAttempts, usar posición por defecto
+            if (attempts >= maxAttempts) {
+                food = { x: 5, y: 5 };
             }
         }
 
@@ -930,7 +986,6 @@
             clearCanvas();
             drawSnake();
             drawFood();
-            drawScore();
         }
 
         function clearCanvas() {
@@ -949,17 +1004,28 @@
         }
 
         function drawFood() {
-            ctx.fillStyle = '#10b981';
-            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
-        }
-
-        function drawScore() {
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '16px Inter';
-            ctx.fillText(`Puntuación: ${score}`, 10, 20);
+            const x = food.x * gridSize;
+            const y = food.y * gridSize;
+            
+            if (tacoImageLoaded) {
+                // Mejorar calidad de renderizado
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                // Dibujar la imagen del taco
+                ctx.drawImage(tacoImage, x, y, gridSize, gridSize);
+            } else {
+                // Fallback: dibujar cuadrado verde si la imagen no está cargada
+                ctx.fillStyle = '#10b981';
+                ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+            }
         }
 
         function moveSnake() {
+            // No mover si no hay dirección o el juego no está corriendo
+            if (!gameRunning || (dx === 0 && dy === 0)) {
+                return;
+            }
+            
             const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
             // Verificar colisiones con las paredes
@@ -968,9 +1034,9 @@
                 return;
             }
 
-            // Verificar colisión consigo misma
-            for (let segment of snake) {
-                if (head.x === segment.x && head.y === segment.y) {
+            // Verificar colisión consigo misma (sin incluir la cabeza actual)
+            for (let i = 0; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
                     gameOver();
                     return;
                 }
@@ -991,11 +1057,16 @@
         function gameOver() {
             gameRunning = false;
             clearInterval(gameLoop);
+            gameLoop = null;
             
-            // Actualizar high score
+            // Actualizar high score con validación
             if (score > highScore) {
                 highScore = score;
-                localStorage.setItem('snakeHighScore', highScore);
+                try {
+                    localStorage.setItem('snakeHighScore', highScore.toString());
+                } catch (e) {
+                    console.error('Error al guardar highScore en localStorage:', e);
+                }
                 document.getElementById('snakeHighScore').textContent = highScore;
             }
 
@@ -1005,12 +1076,20 @@
         }
 
         function resetSnakeGame() {
+            // Detener juego si está corriendo
+            if (gameLoop) {
+                clearInterval(gameLoop);
+                gameLoop = null;
+            }
+            
             snake = [{ x: 10, y: 10 }];
             dx = 0;
             dy = 0;
             score = 0;
+            gameRunning = false;
             document.getElementById('snakeScore').textContent = score;
             document.getElementById('snakeGameOver').classList.remove('show');
+            document.getElementById('snakeStartBtn').textContent = 'Iniciar Juego';
             randomFood();
             drawGame();
         }
@@ -1018,9 +1097,18 @@
         function startGame() {
             if (gameRunning) return;
             
+            // Si el juego no tiene dirección inicial, establecer una
+            if (dx === 0 && dy === 0) {
+                dx = 1; // Empezar moviéndose a la derecha
+            }
+            
             resetSnakeGame();
             gameRunning = true;
             document.getElementById('snakeStartBtn').textContent = 'Pausar';
+            
+            if (gameLoop) {
+                clearInterval(gameLoop);
+            }
             
             gameLoop = setInterval(() => {
                 moveSnake();
@@ -1041,10 +1129,13 @@
                 pauseGame();
             } else {
                 if (dx === 0 && dy === 0) {
-                    // Si no hay dirección, iniciar juego
+                    // Si no hay dirección, iniciar juego con dirección por defecto
                     startGame();
                 } else {
                     // Continuar juego pausado
+                    if (gameLoop) {
+                        clearInterval(gameLoop);
+                    }
                     gameRunning = true;
                     document.getElementById('snakeStartBtn').textContent = 'Pausar';
                     gameLoop = setInterval(() => {
@@ -1057,16 +1148,22 @@
 
         function changeDirection(newDx, newDy) {
             // Prevenir movimiento en dirección opuesta
-            if ((dx !== 0 && newDx === -dx) || (dy !== 0 && newDy === -dy)) {
-                return;
+            if (snake.length > 1) {
+                if ((dx !== 0 && newDx === -dx) || (dy !== 0 && newDy === -dy)) {
+                    return;
+                }
             }
             
-            if (!gameRunning && (dx === 0 && dy === 0)) {
+            // Si el juego no está corriendo y no hay dirección, iniciar juego
+            if (!gameRunning && dx === 0 && dy === 0) {
+                dx = newDx;
+                dy = newDy;
                 startGame();
+            } else {
+                // Cambiar dirección normalmente
+                dx = newDx;
+                dy = newDy;
             }
-            
-            dx = newDx;
-            dy = newDy;
         }
 
         // Controles de teclado
@@ -1249,6 +1346,11 @@
         // Inicializar juego
         randomFood();
         drawGame();
+        
+        // Actualizar posición del joystick al cargar
+        window.addEventListener('load', function() {
+            setTimeout(updateJoystickPosition, 100);
+        });
     </script>
 </body>
 </html>
